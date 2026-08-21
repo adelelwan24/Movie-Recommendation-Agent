@@ -1,0 +1,25 @@
+{
+  "preprocess_version": "1",
+  "movies_csv_sha256": "1e0584a8dd374120e4ed4f2b81f0d2bd0eb95a554708e4a350d00ed5c46d2825",
+  "credits_csv_sha256": "9d0050599ff88d40366c4841204b1489862bca346bfa46c20b05a65d14508435",
+  "row_count": 4803,
+  "embedding_model": "BAAI/bge-small-en-v1.5",
+  "embedding_dimension": 384,
+  "document_template_version": "1",
+  "built_at": "2026-08-21T17:00:15.474850+00:00",
+  "report": {
+    "movies_in": 4803,
+    "credits_in": 4803,
+    "joined": 4803,
+    "unmatched_movies": 0,
+    "unmatched_credits": 0,
+    "malformed_json": {},
+    "missing_release_date": 1,
+    "missing_runtime": 37,
+    "missing_overview": 7,
+    "zero_budget_treated_as_unknown": 1037,
+    "zero_revenue_treated_as_unknown": 1427,
+    "no_director": 30,
+    "no_keywords": 412
+  }
+}
