@@ -177,8 +177,10 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 app.py                      Streamlit UI
 scripts/build_index.py      Offline preprocessing + embedding build (+ --with-qdrant)
 scripts/benchmark_vector_backends.py   numpy vs Qdrant: agreement and latency
+scripts/test_qdrant.py      Drive the Qdrant collection: real queries, filters, latency
 scripts/profile_data.py     Raw-CSV data analysis report
 scripts/profile_documents.py           Document length statistics
+scripts/build_sqlite.py     Side utility: movies.parquet -> artifacts/movies.db
 src/movieagent/
   config.py                 pydantic-settings, layered validation
   data/                     preprocessing, repository, filter DSL   ← framework-free
