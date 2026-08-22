@@ -30,7 +30,7 @@ from movieagent.data.schema import MovieRef
 from movieagent.llm.embeddings import EmbeddingBackend
 from movieagent.retrieval.coverage import CorpusVocabulary
 from movieagent.retrieval.fuzzy import FuzzyTitleMatcher
-from movieagent.retrieval.vector_index import VectorIndex
+from movieagent.retrieval.backend import SearchBackend
 
 
 class Outcome(StrEnum):
@@ -177,7 +177,7 @@ class ToolContext:
     settings: Settings
     repository: MovieRepository
     matcher: FuzzyTitleMatcher
-    index: VectorIndex
+    index: SearchBackend
     embedder: EmbeddingBackend
     documents: list[str]
     vocabulary: CorpusVocabulary | None = None

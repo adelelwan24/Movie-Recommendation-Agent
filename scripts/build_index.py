@@ -27,7 +27,7 @@ if str(_SRC) not in sys.path:  # allow running without an editable install
 
 import pandas as pd  # noqa: E402
 
-from movieagent.config import PREPROCESS_VERSION, get_settings  # noqa: E402
+from movieagent.config import PREPROCESS_VERSION, VectorBackend, get_settings  # noqa: E402
 from movieagent.data.manifest import Manifest  # noqa: E402
 from movieagent.data.preprocess import build_movies_frame, file_sha256  # noqa: E402
 from movieagent.llm.embeddings import build_embedding_backend  # noqa: E402
@@ -49,6 +49,17 @@ def main() -> int:
         help="Rebuild the dataset only. Useful when iterating on preprocessing.",
     )
     parser.add_argument("--force", action="store_true", help="Rebuild even if up to date.")
+    parser.add_argument(
+        "--with-qdrant",
+        action="store_true",
+        help="Also load the vectors into Qdrant. Implied by VECTOR_BACKEND=qdrant.",
+    )
+    parser.add_argument(
+        "--qdrant-path",
+        type=Path,
+        default=None,
+        help="Embedded Qdrant directory. Defaults to <artifacts>/qdrant.",
+    )
     args = parser.parse_args()
 
     settings = get_settings()
@@ -82,6 +93,7 @@ def main() -> int:
 
     embedding_model = settings.embedding.model
     dimension = 0
+    matrix = None
     if args.skip_embeddings:
         log.warning("skipping embeddings; the app will not start until they are built")
     else:
@@ -92,6 +104,37 @@ def main() -> int:
         dimension = int(matrix.shape[1])
         VectorIndex(matrix).save(paths.embeddings_npy)
         log.info("wrote %s %s", paths.embeddings_npy.name, matrix.shape)
+
+    # The numpy artifact is always written: it is the reference implementation the
+    # Qdrant collection is benchmarked against, and the fallback if the store is
+    # unavailable. Qdrant is loaded from it rather than from a second embedding pass.
+    store = settings.vector_store
+    wants_qdrant = args.with_qdrant or store.backend is VectorBackend.QDRANT
+    qdrant_points = 0
+    if wants_qdrant and matrix is None:
+        # `--skip-embeddings --with-qdrant` is the useful combination for loading an
+        # existing index into the store without paying for a second embedding pass.
+        if not paths.embeddings_npy.exists():
+            log.error("--with-qdrant needs embeddings; drop --skip-embeddings")
+            return 2
+        log.info("loading existing %s for the qdrant build", paths.embeddings_npy.name)
+        matrix = VectorIndex.load(paths.embeddings_npy).matrix
+        dimension = int(matrix.shape[1])
+    if wants_qdrant:
+        from movieagent.retrieval.qdrant_index import QdrantIndex  # noqa: PLC0415
+
+        target = args.qdrant_path or paths.qdrant_dir
+        log.info("loading %d vectors into qdrant (%s)", len(matrix), store.url or target)
+        index = QdrantIndex.build(
+            matrix,
+            frame,
+            path=None if store.url else target,
+            url=store.url,
+            api_key=store.api_key,
+            collection=store.collection,
+        )
+        qdrant_points = len(index)
+        index.close()
 
     manifest = Manifest(
         preprocess_version=PREPROCESS_VERSION,
@@ -106,11 +149,22 @@ def main() -> int:
     manifest.write(paths.manifest_json)
 
     elapsed = time.perf_counter() - started
-    print(_summary(len(frame), report.to_dict(), dimension, elapsed, paths.artifacts_dir))
+    print(
+        _summary(
+            len(frame), report.to_dict(), dimension, elapsed, paths.artifacts_dir, qdrant_points
+        )
+    )
     return 0
 
 
-def _summary(rows: int, report: dict, dimension: int, elapsed: float, out: Path) -> str:
+def _summary(
+    rows: int,
+    report: dict,
+    dimension: int,
+    elapsed: float,
+    out: Path,
+    qdrant_points: int = 0,
+) -> str:
     """Print the numbers the documentation has to quote (R-018), rather than estimates."""
     lines = [
         "",
@@ -131,6 +185,8 @@ def _summary(rows: int, report: dict, dimension: int, elapsed: float, out: Path)
         lines.append(f"  malformed JSON            {report['malformed_json']}")
     if dimension:
         lines.append(f"  embedding dimension       {dimension}")
+    if qdrant_points:
+        lines.append(f"  qdrant points             {qdrant_points}")
     lines += [
         f"  artifacts                 {out}",
         f"  elapsed                   {elapsed:.1f}s",

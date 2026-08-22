@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from movieagent.config import PREPROCESS_VERSION, Settings, get_settings
+from movieagent.config import PREPROCESS_VERSION, Settings, VectorBackend, get_settings
 from movieagent.data.manifest import Manifest
 from movieagent.data.preprocess import file_sha256
 from movieagent.data.repository import MovieRepository
@@ -22,6 +22,7 @@ from movieagent.errors import ArtifactError
 from movieagent.llm.embeddings import EmbeddingBackend, build_embedding_backend
 from movieagent.logging import get_logger
 from movieagent.retrieval.coverage import CorpusVocabulary
+from movieagent.retrieval.backend import SearchBackend
 from movieagent.retrieval.fuzzy import FuzzyTitleMatcher
 from movieagent.retrieval.vector_index import VectorIndex
 from movieagent.tools.base import ToolContext
@@ -36,7 +37,7 @@ class Runtime:
     settings: Settings
     repository: MovieRepository
     matcher: FuzzyTitleMatcher
-    index: VectorIndex
+    index: SearchBackend
     embedder: EmbeddingBackend
     documents: list[str]
     vocabulary: CorpusVocabulary
@@ -52,6 +53,27 @@ class Runtime:
             documents=self.documents,
             vocabulary=self.vocabulary,
         )
+
+
+def build_search_backend(settings: Settings) -> SearchBackend:
+    """Construct the configured vector-search backend.
+
+    Both read the same artifacts produced by ``build_index.py``; they differ only in
+    where the vectors live and who evaluates the filter. Imported lazily so a project
+    running on the default backend never needs ``qdrant-client`` installed.
+    """
+    paths = settings.paths
+    store = settings.vector_store
+    if store.backend is VectorBackend.QDRANT:
+        from movieagent.retrieval.qdrant_index import QdrantIndex
+
+        return QdrantIndex.connect(
+            path=None if store.url else paths.qdrant_dir,
+            url=store.url,
+            api_key=store.api_key,
+            collection=store.collection,
+        )
+    return VectorIndex.load(paths.embeddings_npy)
 
 
 def _optional_sha(path: Path) -> str | None:
@@ -90,7 +112,7 @@ def load_runtime(settings: Settings | None = None) -> Runtime:
     manifest.check_embedding(model=settings.embedding.model)
 
     repository = MovieRepository.from_parquet(paths.movies_parquet, manifest)
-    index = VectorIndex.load(paths.embeddings_npy)
+    index = build_search_backend(settings)
     if len(index) != len(repository):
         raise ArtifactError(
             f"Index has {len(index)} vectors but the dataset has {len(repository)} movies. "
@@ -104,9 +126,10 @@ def load_runtime(settings: Settings | None = None) -> Runtime:
     matcher = FuzzyTitleMatcher(repository, settings.fuzzy)
     vocabulary = CorpusVocabulary(documents)
     log.info(
-        "runtime ready: %d movies, %d vectors, %d vocabulary words",
+        "runtime ready: %d movies, %d vectors (%s backend), %d vocabulary words",
         len(repository),
         len(index),
+        index.name,
         len(vocabulary),
     )
 

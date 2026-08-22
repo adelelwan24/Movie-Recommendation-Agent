@@ -72,11 +72,10 @@ class TestVectorIndex:
             assert position is not None
             assert runtime.repository.refs_at(np.array([position]))[0].movie_id == movie_id
 
-    def test_a_movie_is_its_own_nearest_neighbour(self, runtime) -> None:
+    def test_a_movie_is_its_own_nearest_neighbour(self, runtime, vectors) -> None:
         """Sanity check on normalization: self-similarity must be ~1.0."""
-        matrix = runtime.index.matrix
-        assert np.allclose(np.linalg.norm(matrix, axis=1), 1.0, atol=1e-4)
-        hits = runtime.index.search(matrix[10], k=1)
+        assert np.allclose(np.linalg.norm(vectors, axis=1), 1.0, atol=1e-4)
+        hits = runtime.index.search(vectors[10], k=1)
         assert hits[0].position == 10
         assert hits[0].score == pytest.approx(1.0, abs=1e-4)
 
@@ -175,7 +174,7 @@ class TestLowConfidence:
         why it fails: this gibberish scores *higher* than several genuine queries do.
         """
         vector = context.embedder.embed_query("qwertyuiop zxcvbnm asdfgh flurble wizzlewop")
-        top = float((context.index.matrix @ vector).max())
+        top = context.index.search(vector, k=1)[0].score
         assert top > context.settings.retrieval.similarity_floor
 
     @pytest.mark.parametrize(

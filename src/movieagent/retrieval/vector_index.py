@@ -1,5 +1,11 @@
 """In-process exact-cosine vector index (ADR-0006, ADR-0011).
 
+One of two interchangeable backends behind ``retrieval.backend.SearchBackend``, and still
+the default. The other is ``qdrant_index.QdrantIndex``; this module is the reference
+implementation the other is measured against, because the filter semantics defined in
+``MovieRepository.mask_for`` are enforced here as a plain array operation with nothing to
+translate and nothing to get wrong.
+
 ~4,800 documents at 384 dimensions is roughly 7 MB. One matmul searches the whole
 corpus in a couple of milliseconds, which is 0.1% of a turn dominated by LLM latency.
 Approximate search would buy nothing and cost test stability.
@@ -12,25 +18,21 @@ ranking. That guarantees k constraint-satisfying results whenever k exist. Post-
 -- a silent failure this shape cannot produce.
 
 Its expiry date is stated in ADR-0006: O(N*d) does not bend, and past ~500k documents
-this must be replaced.
+this must be replaced. ``VECTOR_BACKEND=qdrant`` is that replacement path, already wired
+and benchmarked -- at this corpus size it is measurably slower, which is the honest
+reason this module is still the default.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
 from movieagent.errors import ArtifactError
+from movieagent.retrieval.backend import Hit, Restriction, coerce_restriction
 
-
-@dataclass(frozen=True, slots=True)
-class Hit:
-    """One result: a row position into the repository frame, and its cosine score."""
-
-    position: int
-    score: float
+__all__ = ["Hit", "VectorIndex"]
 
 
 class VectorIndex:
@@ -39,6 +41,9 @@ class VectorIndex:
     Immutable after construction -- it is shared across Streamlit sessions via
     ``@st.cache_resource`` (ADR-0014).
     """
+
+    #: Identifies this backend in logs, traces and the benchmark report.
+    name = "numpy"
 
     def __init__(self, matrix: np.ndarray) -> None:
         if matrix.ndim != 2:
@@ -74,16 +79,19 @@ class VectorIndex:
         self,
         query_vector: np.ndarray,
         k: int,
-        mask: np.ndarray | None = None,
+        restriction: Restriction | np.ndarray | None = None,
     ) -> list[Hit]:
-        """Top-k by cosine similarity, optionally restricted to ``mask``.
+        """Top-k by cosine similarity, optionally restricted.
 
-        ``mask`` is applied **before** scoring (ADR-0011). Returns fewer than ``k``
-        results only when the candidate pool is genuinely smaller -- and the caller is
-        expected to report the pool size rather than let a short list imply scarcity.
+        The restriction is applied **before** scoring (ADR-0011). Returns fewer than
+        ``k`` results only when the candidate pool is genuinely smaller -- and the
+        caller is expected to report the pool size rather than let a short list imply
+        scarcity.
         """
         if k <= 0:
             return []
+        restriction = coerce_restriction(restriction)
+        mask = restriction.mask if restriction is not None else None
 
         vector = np.asarray(query_vector, dtype=np.float32).reshape(-1)
         if vector.shape[0] != self.dimension:
@@ -114,21 +122,22 @@ class VectorIndex:
         self,
         position: int,
         k: int,
-        mask: np.ndarray | None = None,
+        restriction: Restriction | np.ndarray | None = None,
     ) -> list[Hit]:
         """Movies similar to an existing movie, by its own document vector.
 
         The seed itself is excluded -- "find films similar to Inception" answering
         "Inception" is technically correct and practically useless.
         """
-        hits = self.search(self._matrix[position], k + 1, mask)
+        hits = self.search(self._matrix[position], k + 1, restriction)
         return [hit for hit in hits if hit.position != position][:k]
 
-    def pool_size(self, mask: np.ndarray | None) -> int:
+    def pool_size(self, restriction: Restriction | np.ndarray | None) -> int:
         """How many candidates a mask admits.
 
         Surfaced in the trace because it is the honest confidence signal for hybrid
         search: ranking 8 films out of a pool of 12 is close to arbitrary, and the user
         deserves to see that rather than a confident-looking ordering.
         """
-        return len(self) if mask is None else int(np.count_nonzero(mask))
+        restriction = coerce_restriction(restriction)
+        return len(self) if restriction is None else len(restriction)

@@ -4,6 +4,11 @@
 # Build artifacts (regenerate with: python scripts/build_index.py)
 # artifacts/
 
+# Embedded Qdrant store: 23 MB of derived database, plus a .lock file that is
+# meaningless outside the machine that wrote it.
+# Rebuild with: python scripts/build_index.py --skip-embeddings --with-qdrant
+artifacts/qdrant/
+
 # Source data. ~45 MB; download from Kaggle per the README.
 # Remove these two lines if you would rather vendor the dataset.
 # data/*.csv

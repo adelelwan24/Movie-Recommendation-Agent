@@ -47,11 +47,59 @@ Everything has a working default except `LLM_API_KEY`. See
 | `LLM_MODEL` | `openai/gpt-4o-mini` | Must support native tool calling |
 | `EMBEDDING_PROVIDER` | `sentence_transformers` | or `openai_compatible` |
 | `EMBEDDING_BASE_URL` | — | **Independent of `LLM_BASE_URL`.** OpenRouter serves no `/v1/embeddings` — point this at OpenAI, vLLM, Ollama or LM Studio |
+| `VECTOR_BACKEND` | `numpy` | or `qdrant` — see [Vector backends](#vector-backends) |
+| `QDRANT_URL` | — | Unset means embedded Qdrant in `<ARTIFACTS_DIR>/qdrant`; set it to use a server |
 
 **The deterministic half of the system needs no API key at all.** Preprocessing, structured
 search, fuzzy title matching and the local embedding index all run without one; validation
 is layered so the app refuses to start only on the paths that genuinely need a credential
 ([ADR-0015](docs/decisions/ADR-0015-config-secrets-layered-validation.md)).
+
+### Vector backends
+
+Vector search sits behind one protocol with two implementations, chosen by
+`VECTOR_BACKEND`:
+
+| | `numpy` (default) | `qdrant` |
+|---|---|---|
+| Where vectors live | `artifacts/embeddings.npy`, one in-process array | a Qdrant collection |
+| Who applies filters | a boolean mask over row order | Qdrant payload filters, engine-side |
+| Deployment | nothing to run | embedded by default; a server when `QDRANT_URL` is set |
+| Needs | nothing beyond numpy | `qdrant-client` |
+
+```bash
+# load the existing vectors into an embedded Qdrant collection (no re-embedding)
+python scripts/build_index.py --skip-embeddings --with-qdrant
+
+# then either export VECTOR_BACKEND=qdrant, or set it in .env
+```
+
+Both backends must answer **identically** — the numpy mask is the definition of what a
+filter means, and the Qdrant payload filter is a second implementation of that same
+definition. A drift between them would not raise; it would quietly return plausible
+movies that violate a constraint the user asked for. So it is measured, not assumed:
+
+```bash
+python scripts/benchmark_vector_backends.py     # exits non-zero on any disagreement
+```
+
+Across eight filter shapes (membership, case folding, numeric ranges, `between`,
+cast-or-director, empty pools) the two agree exactly: identical candidate pools,
+identical top-k, identical ordering, scores within 2.5e-07. `tests/test_vector_backends.py`
+asserts the same thing in CI.
+
+On latency, embedded Qdrant is **~180x slower** than the numpy index at this corpus size,
+and the shape of the gap is instructive: numpy gets *faster* as a filter narrows, while
+embedded Qdrant gets *slower* — local mode evaluates payload conditions in Python and
+ignores payload indexes entirely, so every filtered query walks the collection. A served
+Qdrant applies those filters through indexed structures and would need re-measuring. Full
+numbers: [`artifacts/vector_backend_benchmark.md`](artifacts/vector_backend_benchmark.md).
+
+That is why `numpy` remains the default. `qdrant` exists because ADR-0006 named its own
+expiry condition — O(N·d) per query does not bend — and this is that exit, wired and
+verified before it is needed rather than during an incident. Embedded mode takes an
+exclusive lock on its directory, so the app and a script cannot both hold it; concurrent
+readers need a server.
 
 ### Tests
 
@@ -127,11 +175,14 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ```
 app.py                      Streamlit UI
-scripts/build_index.py      Offline preprocessing + embedding build
+scripts/build_index.py      Offline preprocessing + embedding build (+ --with-qdrant)
+scripts/benchmark_vector_backends.py   numpy vs Qdrant: agreement and latency
+scripts/profile_data.py     Raw-CSV data analysis report
+scripts/profile_documents.py           Document length statistics
 src/movieagent/
   config.py                 pydantic-settings, layered validation
   data/                     preprocessing, repository, filter DSL   ← framework-free
-  retrieval/                documents, vector index, fuzzy, coverage ← framework-free
+  retrieval/                documents, vector backends, fuzzy, coverage ← framework-free
   tools/                    the five tools, pure functions           ← framework-free
   llm/                      chat model factory, sanitizer, embeddings
   agent/                    graph, state, nodes, prompts, trace, grounding

@@ -22,6 +22,9 @@ dependencies = [
     # retrieval (ADR-0007, ADR-0009)
     "rapidfuzz>=3.9,<4.0",
     "sentence-transformers>=3.0,<6.0",
+    # vector store (ADR-0006). Embedded by default -- no server required; the same
+    # client talks to a cluster when QDRANT_URL is set.
+    "qdrant-client>=1.9,<2.0",
     # UI (ADR-0014)
     "streamlit>=1.36,<2.0",
 ]

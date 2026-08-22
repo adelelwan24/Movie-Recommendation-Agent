@@ -64,6 +64,22 @@ def matcher(repo: MovieRepository, settings: Settings) -> FuzzyTitleMatcher:
 
 
 @pytest.fixture(scope="session")
+def vectors():
+    """The raw document vectors, independent of which backend serves search.
+
+    Read from the artifact rather than off ``runtime.index``: a matrix is a numpy-index
+    implementation detail, and tests about vector *geometry* should not stop working
+    when the store behind the protocol changes.
+    """
+    import numpy as np
+
+    path = ARTIFACTS_DIR / "embeddings.npy"
+    if not path.exists():
+        pytest.skip("vector index not built")
+    return np.load(path)
+
+
+@pytest.fixture(scope="session")
 def runtime():
     """Full runtime including the vector index. Skips when unbuilt."""
     from movieagent.errors import ArtifactError

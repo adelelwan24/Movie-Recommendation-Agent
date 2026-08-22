@@ -34,6 +34,19 @@ class EmbeddingProvider(StrEnum):
     OPENAI_COMPATIBLE = "openai_compatible"
 
 
+class VectorBackend(StrEnum):
+    """Which engine answers vector search.
+
+    `numpy` is the in-process exact-cosine index ADR-0006 chose and still the default:
+    it needs no service, and at ~4,800 documents it is not the bottleneck. `qdrant` is
+    the same search backed by a real vector database, embedded by default and pointed
+    at a server by setting `QDRANT_URL`.
+    """
+
+    NUMPY = "numpy"
+    QDRANT = "qdrant"
+
+
 class LLMSettings(BaseModel):
     """Chat / tool-calling endpoint. Defaults to OpenRouter; a vLLM swap is a base-URL
     change with no code edit (R-117)."""
@@ -75,6 +88,26 @@ class EmbeddingSettings(BaseModel):
                 "OpenRouter does not serve /v1/embeddings -- point this at OpenAI, "
                 "vLLM, Ollama or LM Studio."
             )
+        return self
+
+
+class VectorStoreSettings(BaseModel):
+    """Vector-store selection (ADR-0006, revisited).
+
+    `url` is the only difference between embedded and served Qdrant: unset means the
+    engine runs in-process against `artifacts/qdrant`, set means a cluster. Nothing else
+    in the system changes shape, which is the point of keeping both behind one protocol.
+    """
+
+    backend: VectorBackend = VectorBackend.NUMPY
+    collection: str = "movies"
+    url: str | None = None
+    api_key: str | None = None
+
+    @model_validator(mode="after")
+    def _check_server(self) -> VectorStoreSettings:
+        if self.url and self.backend is not VectorBackend.QDRANT:
+            raise ValueError("QDRANT_URL is set but VECTOR_BACKEND is not 'qdrant'")
         return self
 
 
@@ -147,6 +180,11 @@ class PathSettings(BaseModel):
         return self.artifacts_dir / "embeddings.npy"
 
     @property
+    def qdrant_dir(self) -> Path:
+        """Embedded Qdrant storage. One directory, single-process -- it takes a lock."""
+        return self.artifacts_dir / "qdrant"
+
+    @property
     def documents_parquet(self) -> Path:
         return self.artifacts_dir / "documents.parquet"
 
@@ -180,6 +218,11 @@ class Settings(BaseSettings):
     embedding_api_key: str | None = None
     embedding_batch_size: int = 64
 
+    vector_backend: VectorBackend = VectorBackend.NUMPY
+    qdrant_collection: str = VectorStoreSettings.model_fields["collection"].default
+    qdrant_url: str | None = None
+    qdrant_api_key: str | None = None
+
     top_k: int = 8
     similarity_floor: float = 0.35
     min_lexical_coverage: float = 0.4
@@ -205,6 +248,8 @@ class Settings(BaseSettings):
         "llm_api_key",
         "embedding_base_url",
         "embedding_api_key",
+        "qdrant_url",
+        "qdrant_api_key",
         "log_file",
         mode="before",
     )
@@ -241,6 +286,15 @@ class Settings(BaseSettings):
             base_url=self.embedding_base_url,
             api_key=self.embedding_api_key,
             batch_size=self.embedding_batch_size,
+        )
+
+    @property
+    def vector_store(self) -> VectorStoreSettings:
+        return VectorStoreSettings(
+            backend=self.vector_backend,
+            collection=self.qdrant_collection,
+            url=self.qdrant_url,
+            api_key=self.qdrant_api_key,
         )
 
     @property

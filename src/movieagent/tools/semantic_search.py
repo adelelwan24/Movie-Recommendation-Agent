@@ -17,6 +17,7 @@ import numpy as np
 from movieagent.data.query import SearchQuery
 from movieagent.data.schema import RetrievedDoc
 from movieagent.logging import get_logger
+from movieagent.retrieval.backend import Restriction
 from movieagent.tools.base import Outcome, ToolContext, ToolResult
 
 log = get_logger("tools.semantic_search")
@@ -52,13 +53,15 @@ def run(
     if query is None and similar_to is None:
         return ToolResult.invalid(["provide either `query` text or a `similar_to` movie id"])
 
-    mask: np.ndarray | None = None
+    # The restriction carries both the pandas mask and the source query, so whichever
+    # backend is configured gets the form it can enforce *before* ranking (ADR-0011).
+    restriction: Restriction | None = None
     constraints: list[str] = []
     if filters is not None and not filters.is_empty():
         problems = repo.validate(filters)
         if problems:
             return ToolResult.invalid(problems)
-        mask = repo.mask_for(filters)
+        restriction = Restriction.from_query(repo, filters)
         constraints = filters.describe()
 
     # R-056, revised by ADR-0026. Checked *before* embedding: if the query is not made
@@ -83,7 +86,7 @@ def run(
                 },
             )
 
-    pool = context.index.pool_size(mask)
+    pool = context.index.pool_size(restriction)
     if pool == 0:
         return ToolResult.empty(
             "No movies satisfy those constraints, so there is nothing to rank.",
@@ -97,12 +100,12 @@ def run(
                 status=Outcome.NOT_FOUND,
                 message=f"Movie id {similar_to} is not in this dataset.",
             )
-        hits = context.index.similar_to(position, k, mask)
+        hits = context.index.similar_to(position, k, restriction)
         seed = repo.ref(similar_to)
         subject = f"movies similar to {seed.label()}" if seed else f"movies similar to {similar_to}"
     else:
         vector = context.embedder.embed_query(query or "")
-        hits = context.index.search(vector, k, mask)
+        hits = context.index.search(vector, k, restriction)
         subject = f"movies matching {query!r}"
 
     if not hits:
@@ -126,6 +129,7 @@ def run(
         "documents": [d.to_dict() for d in retrieved],
         "scores": [round(d.score, 4) for d in retrieved],
         "similarity_floor": settings.similarity_floor,
+        "backend": context.index.name,
         "lexical_coverage": (
             round(context.vocabulary.coverage(query).ratio, 2)
             if query is not None and context.vocabulary is not None
@@ -155,7 +159,7 @@ def run(
         )
 
     message = f"Retrieved {len(retrieved)} {subject}."
-    if mask is not None:
+    if restriction is not None:
         message += f" Ranked within a filtered pool of {pool} movies."
         if pool < k * 2:
             # Honest signal: ranking 8 out of 12 is close to arbitrary, and saying so

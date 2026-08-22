@@ -36,6 +36,16 @@ NOTES: dict[str, str] = {
     ),
     "embedding_api_key": "Only for embedding_provider=openai_compatible.",
     "embedding_batch_size": "Documents per embedding request/batch.",
+    "vector_backend": (
+        "numpy (in-process exact cosine, default) | qdrant. Both answer identically -- "
+        "scripts/benchmark_vector_backends.py measures that they do."
+    ),
+    "qdrant_collection": "Collection name, for VECTOR_BACKEND=qdrant.",
+    "qdrant_url": (
+        "Unset means embedded Qdrant in <ARTIFACTS_DIR>/qdrant, which needs no server. "
+        "Set it to run against a Qdrant instance instead -- that is the whole migration."
+    ),
+    "qdrant_api_key": "Only for a served Qdrant that requires authentication.",
     "top_k": "Default number of semantic results.",
     "similarity_floor": (
         "Backstop only. An absolute cosine threshold cannot separate real queries from "
@@ -55,7 +65,10 @@ NOTES: dict[str, str] = {
     "turn_timeout_s": "Wall-clock budget for one turn.",
     "message_window": "Raw chat messages kept in state; structured memory carries the rest.",
     "data_dir": "Where the TMDB CSVs live.",
-    "artifacts_dir": "Where the build step writes movies.parquet, embeddings.npy and manifest.json.",
+    "artifacts_dir": (
+        "Where the build step writes movies.parquet, embeddings.npy, manifest.json and "
+        "the embedded qdrant/ directory."
+    ),
     "log_level": "DEBUG | INFO | WARNING | ERROR",
     "log_file": "Optional path for a log file; stderr only when unset.",
 }
@@ -67,6 +80,7 @@ _MUST_PROMPT = {"llm_api_key"}
 GROUPS: list[tuple[str, tuple[str, ...]]] = [
     ("LLM — chat and tool calling (R-117)", ("llm_",)),
     ("Embeddings — independent of the LLM endpoint (R-118, ADR-0007)", ("embedding_",)),
+    ("Vector store (ADR-0006)", ("vector_backend", "qdrant_")),
     ("Retrieval (ADR-0011, ADR-0026)", ("top_k", "similarity_floor", "min_lexical", "result_display")),
     ("Fuzzy title matching (ADR-0025)", ("fuzzy_",)),
     ("Agent loop guards (ADR-0021, ADR-0022)", ("recursion_", "max_tool_", "turn_timeout", "message_window")),

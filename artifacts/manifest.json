@@ -6,7 +6,7 @@
   "embedding_model": "BAAI/bge-small-en-v1.5",
   "embedding_dimension": 384,
   "document_template_version": "1",
-  "built_at": "2026-08-21T17:00:15.474850+00:00",
+  "built_at": "2026-08-21T22:20:45.419771+00:00",
   "report": {
     "movies_in": 4803,
     "credits_in": 4803,
