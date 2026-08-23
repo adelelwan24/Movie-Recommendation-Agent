@@ -11,28 +11,164 @@ requirement assessment are in [`docs/`](docs/README.md).
 
 ---
 
-## Setup
+## Quickstart
 
-Two commands before the app runs. The second one is the price of the build/serve split
-(documented in [`docs/AGENT_DOCUMENTATION.md`](docs/AGENT_DOCUMENTATION.md)) — it is the
-design's weakest ergonomic point, and it exists because embedding ~4,800 documents cannot
-happen on every Streamlit rerun.
+From a fresh clone to a running app. Steps 1-4 need **no API key**; only the agent itself does.
+
+**Prerequisites**
+
+| | |
+|---|---|
+| Python | 3.12 (pinned `>=3.12,<3.13`) |
+| Package manager | [`uv`](https://docs.astral.sh/uv/) recommended; plain `pip` works |
+| Disk | ~3 GB — torch is ~2 GB, the embedding model ~130 MB, the artifacts ~12 MB |
+| Network | Needed once, to download the embedding model. Everything after that runs offline |
+| API key | Only for the agent (OpenRouter by default). Preprocessing, structured search, fuzzy matching and the vector index all work without one |
+
+### 1. Put the dataset in `data/`
+
+Download the [TMDB 5000 Movie Dataset][kaggle] from Kaggle and unzip both CSVs into `data/`:
 
 ```bash
-# 1. environment (Python 3.12)
+ls data/
+# tmdb_5000_credits.csv    (~39 MB, 4,803 rows)
+# tmdb_5000_movies.csv     (~5.5 MB, 4,803 rows)
+```
+
+Filenames must match exactly — the build script looks for those two names.
+
+### 2. Create the environment
+
+```bash
 uv venv --python 3.12
+# Windows:        .venv\Scripts\activate
+# macOS / Linux:  source .venv/bin/activate
+
 uv pip install -e ".[dev]"          # or: uv pip install -r requirements.txt
+```
 
-# 2. dataset + vector index  (~10 min: the first run downloads a ~130 MB model)
+`requirements.txt` is a fully resolved lock of the versions this was tested against;
+`pyproject.toml` holds the intended ranges. Use the lock if you want the exact tree.
+
+### 3. Configure
+
+```bash
+cp .env.example .env                # Windows: copy .env.example .env
+```
+
+Then set one value in `.env`:
+
+```ini
+LLM_API_KEY=sk-or-...               # OpenRouter key, or any OpenAI-compatible provider
+```
+
+Everything else has a working default. `.env.example` is **generated** from the settings model
+(`python scripts/gen_env_example.py`), so it cannot drift from the code.
+
+> **Watch `DATA_DIR` and `ARTIFACTS_DIR`.** Both default to this checkout and can be left
+> unset. If you do set them — or copy a `.env` from another clone — make sure they point at
+> *this* directory. An absolute path left over from elsewhere makes the app silently read
+> another folder's artifacts, which looks like the build "not taking effect".
+
+### 4. Build the artifacts
+
+This is the step that turns the two CSVs into everything the app loads:
+
+```bash
 python scripts/build_index.py
+```
 
-# 3. run
-cp .env.example .env                # set LLM_API_KEY
+It reads both CSVs, joins them, normalises the columns, builds one semantic document per
+movie, embeds all 4,803 of them, and writes a manifest recording exactly what it used.
+**Expect roughly 5-15 minutes on CPU the first time** — most of it the one-off model download
+plus the embedding pass. Later rebuilds skip the download.
+
+On success it prints the real counts, not estimates:
+
+```
+Build complete.
+  movies processed          4803
+  joined from               4803 movies / 4803 credits
+  unmatched on join         0 movies, 0 credits
+  missing release_date      1
+  missing runtime           37
+  budget 0 -> unknown       1037
+  revenue 0 -> unknown      1427
+  no director in crew       30
+  no keywords               412
+  embedding dimension       384
+  artifacts                 <repo>/artifacts
+  elapsed                   ...s
+
+Next:  streamlit run app.py
+```
+
+Four files land in `artifacts/`:
+
+| File | Size | What it is |
+|---|---|---|
+| `movies.parquet` | 2.9 MB | The processed dataset — 28 columns, nullable dtypes, real dates. Parquet because a CSV round-trip would undo the unknown-is-not-zero semantics |
+| `documents.parquet` | 1.9 MB | One labelled semantic document per movie (mean 95 words) |
+| `embeddings.npy` | 7.4 MB | 4,803 x 384 float32, L2-normalised |
+| `manifest.json` | 809 B | Provenance: source SHA-256s, row count, embedding model + dimension, template version, build report |
+
+The manifest is what makes a stale artifact fail **loudly**. If the CSVs, the preprocessing
+version or the embedding model change, loading raises with instructions instead of quietly
+answering from an outdated index.
+
+Useful flags:
+
+```bash
+python scripts/build_index.py --force             # rebuild even if up to date
+python scripts/build_index.py --skip-embeddings   # dataset only, while iterating on preprocessing
+python scripts/build_index.py --with-qdrant       # also load the vectors into Qdrant
+```
+
+### 5. Verify the build (optional)
+
+```bash
+pytest                                  # 186 pass, no network, ~40s
+python scripts/profile_data.py          # profiles the raw CSVs   -> artifacts/data_analysis.md
+python scripts/profile_documents.py     # document length stats   -> artifacts/document_stats.md
+```
+
+### 6. Run the app
+
+```bash
 streamlit run app.py
 ```
 
-Both CSVs must be in `data/`. If they are missing, download them from
-[Kaggle][kaggle] — `tmdb_5000_movies.csv` and `tmdb_5000_credits.csv`.
+Open http://localhost:8501. The sidebar should read **"4,803 movies · 4,803 vectors"** — if it
+does, the artifacts loaded and the agent is ready. Try one of the sample questions in the
+sidebar, or ask something like *"Find me a funny science-fiction movie from after 2010 that is
+under 2 hours"*.
+
+### Optional extras
+
+```bash
+# Load the existing vectors into an embedded Qdrant collection (no re-embedding),
+# then set VECTOR_BACKEND=qdrant in .env
+python scripts/build_index.py --skip-embeddings --with-qdrant
+
+# A queryable SQLite copy of the dataset, on the side
+python scripts/build_sqlite.py            # -> artifacts/movies.db
+python scripts/build_sqlite.py --samples  # worked example queries
+```
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `Source CSV not found: .../tmdb_5000_movies.csv` | The dataset is not in `data/` | Download both CSVs from [Kaggle][kaggle] (step 1) |
+| `The dataset has not been built yet` | No artifacts | Run `python scripts/build_index.py` |
+| `The vector index was built with embedding model X` | `EMBEDDING_MODEL` changed after the build | `python scripts/build_index.py --force` |
+| `Artifacts do not match the source CSVs` | The CSVs changed | Rebuild with `--force` |
+| `LLM_API_KEY is not set` | The agent needs a chat model | Set it in `.env`. Structured search, fuzzy matching and index building do not need one |
+| App shows stale or missing data after a rebuild | `DATA_DIR` / `ARTIFACTS_DIR` in `.env` point elsewhere | Unset them, or point them at this checkout |
+| `The embedded Qdrant store ... is locked by another process` | Embedded Qdrant is single-process | Stop the app or the other script; for concurrent access run a server and set `QDRANT_URL` |
+| `Port 8501 is already in use` | Another Streamlit instance | `streamlit run app.py --server.port 8502` |
+| First run stalls on "Loading weights" | One-off ~130 MB model download | Wait; set `HF_TOKEN` if you hit Hugging Face rate limits |
+| `pytest` errors with `PermissionError ... pytest-of-<user>` | Environment: pytest cannot scan its temp root | `pytest --basetemp=.pytest-tmp` |
 
 ### Configuration
 
@@ -202,7 +338,10 @@ whole system.
 
 | Document | What it is |
 |---|---|
+| [`docs/TECHNICAL_DESIGN.md`](docs/TECHNICAL_DESIGN.md) | The design document: data decisions, agent design, search, RAG, memory, 14 worked examples |
 | [`docs/AGENT_DOCUMENTATION.md`](docs/AGENT_DOCUMENTATION.md) | Technical design, repository guide, actual checked outputs and limitations |
+| [`docs/LANGGRAPH_WORKFLOW.md`](docs/LANGGRAPH_WORKFLOW.md) | Graph topology, state channels and reducers, node-by-node walkthrough |
+| [`docs/CLASS_REFERENCE.md`](docs/CLASS_REFERENCE.md) | Every class and model: what it represents and how the pieces connect |
 | [`docs/ARCHITECTURE_REVIEW.md`](docs/ARCHITECTURE_REVIEW.md) | Senior-engineer validation against the assignment, with prioritized findings |
 | [`docs/INTERVIEW_QA.md`](docs/INTERVIEW_QA.md) | Architecture and AI-engineering interview questions with sample answers |
 
