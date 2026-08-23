@@ -108,8 +108,11 @@ EXECUTOR_SYSTEM = dedent(
     pick one. When it returns "empty", say what matched nothing and which constraint was
     responsible.
 
-    Keep answers concise and specific. Tables are rendered separately from your text, so
-    do not reproduce long result lists in prose -- summarise and point at the table.
+    Keep answers concise and specific. The interface renders every result as a table
+    directly beneath your text, so write the finding and let the table carry the rows:
+    state what the data shows in a sentence or two, name at most the top two or three
+    items inline, and refer to the table for the rest. Write prose, never a markdown
+    table -- one is already on screen.
     """
 )
 
@@ -133,8 +136,10 @@ SYNTHESIS_SYSTEM = dedent(
     - Do not state any figure that no tool returned.
     - Report unknown fields as unknown.
     - If the tools found nothing, say so and name the constraint that was binding.
-    - Two or three sentences unless the question genuinely needs more. Result tables are
-      shown separately; refer to them rather than repeating their rows.
+    - Two or three sentences unless the question genuinely needs more.
+    - The result table is already rendered below your answer. Write the finding as prose
+      and point at it ("the full ranking is in the table"); name at most two or three
+      items inline. Output plain sentences, never a markdown table.
     """
 )
 

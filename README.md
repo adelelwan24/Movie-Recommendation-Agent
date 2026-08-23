@@ -4,8 +4,8 @@ An agentic movie discovery and analysis system over the [TMDB 5000 Movie Dataset
 An LLM plans and narrates; deterministic components decide and compute. Every number and
 record in an answer comes from pandas or an exact vector search — never from the model.
 
-Built to the SiliconExpert AI Engineer technical assignment
-([`docs/SiliconExpert_AI_Engineer_Technical_Assignment_Movies.pdf`](docs/SiliconExpert_AI_Engineer_Technical_Assignment_Movies.pdf)).
+Built to the SiliconExpert AI Engineer technical assignment. The repository review and
+requirement assessment are in [`docs/`](docs/README.md).
 
 [kaggle]: https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata
 
@@ -14,7 +14,7 @@ Built to the SiliconExpert AI Engineer technical assignment
 ## Setup
 
 Two commands before the app runs. The second one is the price of the build/serve split
-([ADR-0005](docs/decisions/ADR-0005-offline-build-pandas-repository.md)) — it is the
+(documented in [`docs/AGENT_DOCUMENTATION.md`](docs/AGENT_DOCUMENTATION.md)) — it is the
 design's weakest ergonomic point, and it exists because embedding ~4,800 documents cannot
 happen on every Streamlit rerun.
 
@@ -52,8 +52,7 @@ Everything has a working default except `LLM_API_KEY`. See
 
 **The deterministic half of the system needs no API key at all.** Preprocessing, structured
 search, fuzzy title matching and the local embedding index all run without one; validation
-is layered so the app refuses to start only on the paths that genuinely need a credential
-([ADR-0015](docs/decisions/ADR-0015-config-secrets-layered-validation.md)).
+is layered so the app refuses to start only on the paths that genuinely need a credential.
 
 ### Vector backends
 
@@ -104,14 +103,13 @@ readers need a server.
 ### Tests
 
 ```bash
-pytest                # 137 tests, no network, ~25s
+pytest                # 189 collected: 186 pass + 3 documented xfails, no network
 pytest -m live        # opt-in: a couple of real turns against the configured provider
 ```
 
 The default run makes **no network calls**. Run `-m live` after any LangChain/LangGraph
 upgrade — the fake chat model encodes the library's message contract, so a version bump
-could break the integration while the suite stays green
-([ADR-0024](docs/decisions/ADR-0024-testing-fake-chat-model.md)).
+could break the integration while the suite stays green.
 
 ---
 
@@ -169,7 +167,7 @@ routes to a real `interrupt`: the turn pauses, the checkpointer holds the state,
 next message **resumes that turn** rather than starting a new one. `ground` checks the
 finished answer for movies that were never retrieved.
 
-Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Full detail: [`docs/AGENT_DOCUMENTATION.md`](docs/AGENT_DOCUMENTATION.md).
 
 ### Project layout
 
@@ -189,8 +187,8 @@ src/movieagent/
   llm/                      chat model factory, sanitizer, embeddings
   agent/                    graph, state, nodes, prompts, trace, grounding
   ui/                       result and trace rendering
-tests/                      137 tests
-docs/                       requirements, architecture, ADRs, agent documentation
+tests/                      unit, graph, retrieval, structural and backend-parity tests
+docs/                       design guide, architecture review and interview Q&A
 ```
 
 Import direction is one-way and **enforced by a test**: `langgraph`/`langchain*` may be
@@ -204,13 +202,9 @@ whole system.
 
 | Document | What it is |
 |---|---|
-| [`docs/AGENT_DOCUMENTATION.md`](docs/AGENT_DOCUMENTATION.md) | **Deliverable 3** — data decisions, agent design, search, RAG pipeline, memory, worked examples, limitations |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The system as built: diagrams, state model, trust boundaries, extension points, rejected architectures |
-| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Every requirement extracted from the PDF, numbered and testable |
-| [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) | Requirement → component → test → ADR |
-| [`docs/PATTERNS.md`](docs/PATTERNS.md) | Every design pattern used, and the simpler alternative passed over |
-| [`docs/decisions/`](docs/decisions/) | 26 ADRs, including two reversals and their evidence |
-| [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | Ambiguities in the brief and how each was resolved |
+| [`docs/AGENT_DOCUMENTATION.md`](docs/AGENT_DOCUMENTATION.md) | Technical design, repository guide, actual checked outputs and limitations |
+| [`docs/ARCHITECTURE_REVIEW.md`](docs/ARCHITECTURE_REVIEW.md) | Senior-engineer validation against the assignment, with prioritized findings |
+| [`docs/INTERVIEW_QA.md`](docs/INTERVIEW_QA.md) | Architecture and AI-engineering interview questions with sample answers |
 
 ---
 
@@ -237,17 +231,15 @@ Stated here rather than only in the conclusions, because they will be visible in
 
 ---
 
-## Deliberately not built
+## Not currently built
 
-MCP interface, REST API, web-search fallback, and hosted deployment — all out of scope by
-agreement, each with its reasoning and a revisit trigger in
-[ADR-0017](docs/decisions/ADR-0017-deliberate-non-decisions.md). Web search additionally
-conflicts with the "never invent movie metadata" requirement unless a full provenance model
-is built, and half-doing it would be worse than not doing it.
+MCP interface, REST API, and web-search fallback are optional bonuses and are not
+implemented. A hosted deployment is also absent; the assignment's deliverables table
+requires a live Streamlit URL, so deployment remains a submission blocker. Web search
+would additionally require a provenance model to preserve the "never invent movie
+metadata" guarantee.
 
 ## Version control
 
-This tree is not a git repository — version control was left to the repository owner. The
-[ADR index](docs/decisions/README.md) ends with a 19-step commit plan mapped to the ADRs, so
-the "meaningful commits" intent stays recoverable. A `.gitignore` is included and ready to
-adopt.
+This tree is a Git repository. At review time the active branch is `vector_db`; review the
+history and current working-tree changes before preparing the private submission.

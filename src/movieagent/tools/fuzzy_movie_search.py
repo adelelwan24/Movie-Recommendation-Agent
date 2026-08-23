@@ -43,7 +43,11 @@ def run(context: ToolContext, title: str) -> ToolResult:
             return ToolResult.ok_result(
                 f"{title!r} resolves to {match.best.ref.label()} ({match.reason}).",
                 refs=[match.best.ref],
-                payload={"candidates": candidates, "record": match.best.ref.to_dict()},
+                # `resolved`, not `record`: this is a reference (id, title, year), not
+                # the full record `movie_details` returns. Naming it "record" made the
+                # UI draw a detail card for it, every field of which was "unknown"
+                # because a reference has no fields to show.
+                payload={"candidates": candidates, "resolved": match.best.ref.to_dict()},
                 meta={"score": match.best.score, "normalized": match.normalized},
             )
 

@@ -112,7 +112,15 @@ class ToolResult:
             body["movies"] = [r.to_dict() for r in self.refs[:25]]
             if len(self.refs) > 25:
                 body["movies_truncated_to"] = 25
-        for key in ("total", "shown", "pool_size", "candidates", "aggregate", "record"):
+        for key in (
+            "total",
+            "shown",
+            "pool_size",
+            "candidates",
+            "aggregate",
+            "record",
+            "resolved",
+        ):
             if key in self.payload:
                 body[key] = self.payload[key]
         if self.meta:

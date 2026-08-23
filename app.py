@@ -32,6 +32,7 @@ from movieagent.errors import ArtifactError, ConfigurationError  # noqa: E402
 from movieagent.logging import configure_logging  # noqa: E402
 from movieagent.runtime import build_default_agent, load_runtime  # noqa: E402
 from movieagent.ui.components import render_results, render_trace  # noqa: E402
+from movieagent.ui.text import strip_markdown_tables  # noqa: E402
 
 st.set_page_config(page_title="TMDB Movie Agent", page_icon="🎬", layout="wide")
 
@@ -111,7 +112,7 @@ def _render_history() -> None:
         with st.chat_message("user"):
             st.markdown(entry["question"])
         with st.chat_message("assistant"):
-            st.markdown(entry["answer"])
+            st.markdown(strip_markdown_tables(entry["answer"]))
             trace = entry.get("trace")
             if trace is not None:
                 render_results(trace)
@@ -137,7 +138,10 @@ def _handle(question: str) -> None:
                 result = agent.run(question, thread_id)
 
         st.session_state["awaiting_clarification"] = result.interrupted
-        st.markdown(result.answer)
+        # Tables in the answer text are always duplicates of what `render_results`
+        # is about to draw from the payload, so the renderer drops them (ADR-0012).
+        # `result.answer` itself is stored and traced unchanged.
+        st.markdown(strip_markdown_tables(result.answer))
         render_results(result.trace)
         with st.expander("How this answer was produced", expanded=result.interrupted):
             render_trace(result.trace)

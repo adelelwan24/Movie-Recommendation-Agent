@@ -163,3 +163,21 @@ class TestPersonResolution:
 
     def test_partial_name_resolves(self, matcher) -> None:
         assert "Quentin Tarantino" in matcher.resolve_person("Tarantino")
+
+
+class TestResolvedPayload:
+    """What the tool returns is a reference, and it says so (R-060).
+
+    It used to return the match under a ``record`` key. The UI draws a detail card for
+    any ``record``, so "Tell me about Intersteler" rendered an empty Interstellar card
+    -- every field "unknown", because a reference has no fields -- directly above the
+    real one from ``movie_details``.
+    """
+
+    def test_a_match_is_reported_as_resolved_not_as_a_record(self, context) -> None:
+        from movieagent.ui.components import is_record
+
+        result = fuzzy_search(context, title="Intersteler")
+        assert result.payload["resolved"]["title"] == "Interstellar"
+        assert "record" not in result.payload
+        assert not is_record(result.payload["resolved"])

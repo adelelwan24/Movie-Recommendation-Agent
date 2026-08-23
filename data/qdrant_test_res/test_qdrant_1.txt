@@ -1,0 +1,313 @@
+cd "d:/Docs/Current/Movie Recommendation Agent - V2" && export ARTIFACTS_DIR="d:/Docs/Current/Movie Recommendatio
+n Agent - V2/artifacts" DATA_DIR="d:/Docs/Current/Movie Recommendation Agent - V2/data" && ./.venv/Scripts/python.e
+xe scripts/test_qdrant.py 
+==============================================================================
+QDRANT COLLECTION
+==============================================================================
+  location    d:\Docs\Current\Movie Recommendation Agent - V2\artifacts\qdrant
+  mode        embedded (single-process)
+  collection  movies
+  points      4,803   dimension 384
+  embedder    BAAI/bge-small-en-v1.5
+  cases       13   k=8   repeats=5
+
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights: 100%|████████████████████████████████████████████████████████| 199/199 [00:00<00:00, 4789.23it/s]
+==============================================================================
+plain-survival
+==============================================================================
+  query    "someone trying to survive alone on another planet"
+  filters  none
+  pool     4,803 of the corpus
+  embed      19.24 ms  (once per query)
+  search     17.04 ms median   [13.08 - 17.78]  over 5 runs, k=8
+
+  #  title                                   year  genres                          score 
+  -  --------------------------------------  ----  ------------------------------  ------
+  1  What Planet Are You From?               2000  Comedy, Drama, Romance          0.6218
+  2  The Martian                             2015  Drama, Adventure, Science Fict  0.6127
+  3  I Am Legend                             2007  Drama, Horror, Action           0.6090
+  4  Meet Dave                               2008  Comedy, Science Fiction, Adven  0.6002
+  5  Planet 51                               2009  Science Fiction, Animation, Fa  0.5976
+  6  Silent Running                          1972  Adventure, Drama, Science Fict  0.5974
+  7  Seeking a Friend for the End of the Wo  2012  Comedy, Drama, Romance          0.5971
+  8  E.T. the Extra-Terrestrial              1982  Science Fiction, Adventure, Fa  0.5951
+
+==============================================================================
+plain-psychological
+==============================================================================
+  query    "a dark psychological thriller that messes with your head"
+  filters  none
+  pool     4,803 of the corpus
+  embed      21.32 ms  (once per query)
+  search     17.66 ms median   [10.45 - 18.13]  over 5 runs, k=8
+
+  #  title            year  genres                          score 
+  -  ---------------  ----  ------------------------------  ------
+  1  The Dark Hours   2005  Horror, Science Fiction, Thril  0.7111
+  2  Gothika          2003  Horror, Thriller                0.6887
+  3  Two Evil Eyes    1990  Horror, Thriller                0.6873
+  4  Inception        2010  Action, Thriller, Science Fict  0.6814
+  5  The Cell         2000  Horror, Science Fiction, Thril  0.6808
+  6  American Psycho  2000  Thriller, Drama, Crime          0.6767
+  7  The Number 23    2007  Thriller, Drama, Mystery        0.6708
+  8  Spider           2002  Drama, Mystery, Thriller        0.6690
+
+==============================================================================
+plain-timetravel
+==============================================================================
+  query    "time travel and changing the past"
+  filters  none
+  pool     4,803 of the corpus
+  embed      17.10 ms  (once per query)
+  search     18.66 ms median   [10.59 - 19.50]  over 5 runs, k=8
+
+  #  title                       year  genres                          score 
+  -  --------------------------  ----  ------------------------------  ------
+  1  Time Changer                2002  Comedy, Drama, Family           0.7082
+  2  The Butterfly Effect        2004  Science Fiction, Thriller       0.6721
+  3  Timeline                    2003  Action, Adventure, Science Fic  0.6686
+  4  Project Almanac             2015  Science Fiction, Thriller       0.6594
+  5  About Time                  2013  Comedy, Drama, Science Fiction  0.6586
+  6  Somewhere in Time           1980  Science Fiction, Drama, Fantas  0.6553
+  7  X-Men: Days of Future Past  2014  Action, Adventure, Fantasy      0.6337
+  8  Timecrimes                  2007  Science Fiction, Thriller       0.6336
+
+==============================================================================
+plain-heist
+==============================================================================
+  query    "a heist crew pulling off an impossible robbery"
+  filters  none
+  pool     4,803 of the corpus
+  embed      24.50 ms  (once per query)
+  search     12.90 ms median   [11.21 - 19.71]  over 5 runs, k=8
+
+  #  title                                year  genres                   score 
+  -  -----------------------------------  ----  -----------------------  ------
+  1  Heist                                2015  Crime, Action, Thriller  0.6952
+  2  Tower Heist                          2011  Action, Comedy           0.6740
+  3  The Italian Job                      2003  Action, Crime            0.6535
+  4  The Good Thief                       2003  Crime, Drama, Thriller   0.6532
+  5  What's the Worst That Could Happen?  2001  Action, Comedy           0.6487
+  6  Plastic                              2014  Drama, Action, Comedy    0.6390
+  7  Blood and Wine                       1996  Crime, Drama, Thriller   0.6364
+  8  Man on a Ledge                       2012  Action, Thriller, Crime  0.6349
+
+==============================================================================
+filter-scifi-recent-short
+==============================================================================
+  query    "funny science fiction"
+  filters  runtime < 120.0; release_year >= 2011; genre in ['Science Fiction']
+  why      three filter kinds at once: membership, year range, numeric
+  pool     93 of the corpus  <- filtered before ranking
+  embed      17.92 ms  (once per query)
+  search     78.56 ms median   [74.07 - 100.23]  over 5 runs, k=8
+
+  #  title                     year  genres                          score 
+  -  ------------------------  ----  ------------------------------  ------
+  1  Home                      2015  Fantasy, Comedy, Animation      0.6394
+  2  Earth to Echo             2014  Family, Adventure, Science Fic  0.6253
+  3  U.F.O.                    2012  Action, Adventure, Science Fic  0.6228
+  4  Escape from Planet Earth  2013  Animation, Comedy, Adventure    0.6200
+  5  Elysium                   2013  Science Fiction, Action, Drama  0.6170
+  6  10 Cloverfield Lane       2016  Thriller, Science Fiction, Dra  0.6159
+  7  Attack the Block          2011  Action, Comedy, Science Fictio  0.6140
+  8  Ender's Game              2013  Science Fiction, Action, Adven  0.6111
+
+==============================================================================
+filter-acclaimed-drama
+==============================================================================
+  query    "a family torn apart by a secret"
+  filters  vote_average >= 7.5; vote_count >= 1000.0; genre in ['Drama']
+  pool     116 of the corpus  <- filtered before ranking
+  embed      22.83 ms  (once per query)
+  search     51.89 ms median   [50.34 - 85.54]  over 5 runs, k=8
+
+  #  title                            year  genres                    score 
+  -  -------------------------------  ----  ------------------------  ------
+  1  Spotlight                        2015  Drama, Thriller, History  0.5882
+  2  Seven Pounds                     2008  Drama                     0.5762
+  3  Little Miss Sunshine             2006  Comedy, Drama             0.5676
+  4  A Walk to Remember               2002  Drama, Romance            0.5645
+  5  Room                             2015  Drama, Thriller           0.5635
+  6  Mystic River                     2003  Thriller, Crime, Drama    0.5604
+  7  The Perks of Being a Wallflower  2012  Drama, Romance            0.5576
+  8  The Sixth Sense                  1999  Mystery, Thriller, Drama  0.5534
+
+==============================================================================
+filter-person
+==============================================================================
+  query    "war and survival"
+  filters  person in ['Tom Hanks']
+  why      the DSL's only disjunction: cast OR director
+  pool     32 of the corpus  <- filtered before ranking
+  embed      22.09 ms  (once per query)
+  search    231.53 ms median   [210.78 - 253.32]  over 5 runs, k=8
+
+  #  title                 year  genres                   score 
+  -  --------------------  ----  -----------------------  ------
+  1  Saving Private Ryan   1998  Drama, History, War      0.6220
+  2  Charlie Wilson's War  2007  Comedy, Drama, History   0.5810
+  3  Bridge of Spies       2015  Thriller, Drama          0.5757
+  4  The Green Mile        1999  Fantasy, Drama, Crime    0.5527
+  5  Forrest Gump          1994  Comedy, Drama, Romance   0.5372
+  6  Captain Phillips      2013  Action, Drama, Thriller  0.5356
+  7  The Terminal          2004  Comedy, Drama            0.5347
+  8  Cast Away             2000  Adventure, Drama         0.5316
+
+==============================================================================
+filter-keyword
+==============================================================================
+  query    "a villain with a plan"
+  filters  keyword in ['superhero']
+  pool     69 of the corpus  <- filtered before ranking
+  embed      23.02 ms  (once per query)
+  search     99.43 ms median   [89.98 - 129.62]  over 5 runs, k=8
+
+  #  title                        year  genres                          score 
+  -  ---------------------------  ----  ------------------------------  ------
+  1  Hancock                      2008  Fantasy, Action                 0.6485
+  2  Defendor                     2009  Drama, Action, Comedy           0.6186
+  3  Spider-Man                   2002  Fantasy, Action                 0.6163
+  4  Batman                       1989  Fantasy, Action                 0.6017
+  5  The Dark Knight              2008  Drama, Action, Crime            0.5907
+  6  All Superheroes Must Die     2011  Science Fiction, Thriller       0.5897
+  7  Hellboy II: The Golden Army  2008  Adventure, Fantasy, Science Fi  0.5889
+  8  The Shadow                   1994  Adventure, Fantasy, Action      0.5868
+
+==============================================================================
+filter-budget-range
+==============================================================================
+  query    "spectacular visual effects"
+  filters  budget between 150000000.0 and 300000000.0
+  why      unknown budgets must be excluded, not treated as 0
+  pool     143 of the corpus  <- filtered before ranking
+  embed      14.58 ms  (once per query)
+  search     52.49 ms median   [47.55 - 74.60]  over 5 runs, k=8
+
+  #  title                                year  genres                          score 
+  -  -----------------------------------  ----  ------------------------------  ------
+  1  Edge of Tomorrow                     2014  Action, Science Fiction         0.5778
+  2  2012                                 2009  Action, Adventure, Science Fic  0.5746
+  3  Monsters vs Aliens                   2009  Animation, Family, Adventure    0.5704
+  4  Oz: The Great and Powerful           2013  Fantasy, Adventure, Family      0.5695
+  5  Pacific Rim                          2013  Action, Science Fiction, Adven  0.5680
+  6  Up                                   2009  Animation, Comedy, Family       0.5658
+  7  The Hobbit: The Desolation of Smaug  2013  Adventure, Fantasy              0.5649
+  8  Angels & Demons                      2009  Thriller, Mystery               0.5612
+
+==============================================================================
+filter-narrow-pool
+==============================================================================
+  query    "revenge"
+  filters  release_year >= 2011; genre in ['Western']
+  why      ranking within a tiny pool is weakly meaningful -- the pool is reported
+  pool     17 of the corpus  <- filtered before ranking
+  embed      18.52 ms  (once per query)
+  search     78.65 ms median   [58.17 - 80.40]  over 5 runs, k=8
+
+  #  title                                   year  genres                      score 
+  -  --------------------------------------  ----  --------------------------  ------
+  1  The Revenant                            2015  Western, Drama, Adventure   0.5977
+  2  Doc Holliday's Revenge                  2014  Western                     0.5949
+  3  Slow West                               2015  Romance, Thriller, Western  0.5531
+  4  The Hateful Eight                       2015  Crime, Drama, Mystery       0.5476
+  5  Django Unchained                        2012  Drama, Western              0.5438
+  6  The Homesman                            2014  Western, Drama              0.5403
+  7  Casa De Mi Padre                        2012  Comedy, Western             0.5360
+  8  The Legend of Hell's Gate: An American  2011  Action, Adventure, History  0.5271
+
+==============================================================================
+filter-empty-pool
+==============================================================================
+  query    "revenge"
+  filters  release_year >= 2030; genre in ['Western']
+  why      no candidates: must return nothing rather than ignoring the filter
+  pool     0 of the corpus  <- filtered before ranking
+  embed      22.44 ms  (once per query)
+  search     68.84 ms median   [48.40 - 92.52]  over 5 runs, k=8
+
+  no results -- the filter admits nothing, which is the correct answer
+
+==============================================================================
+similar-inception
+==============================================================================
+  query    movies similar to id 27205
+  filters  none
+  why      ranked by the seed's own vector
+  pool     4,803 of the corpus
+  search     28.03 ms median   [26.36 - 33.76]  over 5 runs, k=8
+
+  #  title                       year  genres                          score 
+  -  --------------------------  ----  ------------------------------  ------
+  1  The Score                   2001  Action, Crime, Thriller         0.8001
+  2  Trance                      2013  Thriller, Crime, Drama          0.7989
+  3  10 Cloverfield Lane         2016  Thriller, Science Fiction, Dra  0.7978
+  4  Wristcutters: A Love Story  2006  Comedy, Drama, Fantasy          0.7893
+  5  The Jacket                  2005  Drama, Mystery, Thriller        0.7878
+  6  The Terminator              1984  Action, Thriller, Science Fict  0.7859
+  7  Light Sleeper               1992  Drama, Crime                    0.7851
+  8  The Muse                    1999  Fantasy, Comedy                 0.7849
+
+==============================================================================
+similar-filtered
+==============================================================================
+  query    movies similar to id 27205
+  filters  release_year >= 2015
+  why      similarity plus a hard constraint
+  pool     321 of the corpus  <- filtered before ranking
+  search     62.17 ms median   [51.25 - 70.95]  over 5 runs, k=8
+
+  #  title                            year  genres                          score 
+  -  -------------------------------  ----  ------------------------------  ------
+  1  10 Cloverfield Lane              2016  Thriller, Science Fiction, Dra  0.7978
+  2  Now You See Me 2                 2016  Action, Adventure, Comedy       0.7803
+  3  Listening                        2015  Drama, Thriller, Science Ficti  0.7649
+  4  Jupiter Ascending                2015  Science Fiction, Fantasy, Acti  0.7605
+  5  Maze Runner: The Scorch Trials   2015  Action                          0.7567
+  6  The Curse of Downers Grove       2015  Thriller, Mystery, Horror       0.7532
+  7  Alice Through the Looking Glass  2016  Fantasy                         0.7528
+  8  Nerve                            2016  Mystery, Adventure, Crime       0.7498
+
+==============================================================================
+SUMMARY
+==============================================================================
+  case                       pool   hits  embed ms  search ms  min     max   
+  -------------------------  -----  ----  --------  ---------  ------  ------
+  plain-survival             4,803  8     19.24     17.04      13.08   17.78 
+  plain-psychological        4,803  8     21.32     17.66      10.45   18.13 
+  plain-timetravel           4,803  8     17.10     18.66      10.59   19.50 
+  plain-heist                4,803  8     24.50     12.90      11.21   19.71 
+  filter-scifi-recent-short  93     8     17.92     78.56      74.07   100.23
+  filter-acclaimed-drama     116    8     22.83     51.89      50.34   85.54 
+  filter-person              32     8     22.09     231.53     210.78  253.32
+  filter-keyword             69     8     23.02     99.43      89.98   129.62
+  filter-budget-range        143    8     14.58     52.49      47.55   74.60 
+  filter-narrow-pool         17     8     18.52     78.65      58.17   80.40 
+  filter-empty-pool          0      0     22.44     68.84      48.40   92.52 
+  similar-inception          4,803  8     -         28.03      26.36   33.76 
+  similar-filtered           321    8     -         62.17      51.25   70.95 
+
+  search, all cases      median 52.49 ms
+  unfiltered             median 17.66 ms
+  filtered               median 73.70 ms
+  embedding the query    median 21.32 ms
+  k                      8
+
+  Filtered queries are 4.2x the cost of unfiltered ones. Embedded
+  Qdrant evaluates payload conditions in Python and ignores payload indexes,
+  so a filter adds work instead of removing it. On a server those same
+  filters run through indexed structures during traversal.
+
+==============================================================================
+LATENCY vs k
+==============================================================================
+  k    unfiltered ms  genre-filtered ms
+  ---  -------------  -----------------
+  1    10.76          73.93            
+  8    9.47           61.74            
+  25   9.72           60.83            
+  50   9.62           66.78            
+  100  10.85          62.89            
+
+  Asking for more neighbours is close to free; the filter is what costs.

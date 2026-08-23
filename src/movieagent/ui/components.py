@@ -52,8 +52,34 @@ def render_results(trace: Trace) -> None:
             st.caption(f"**{call.tool}** — {call.message}")
             st.dataframe(_display_frame(rows), width="stretch", hide_index=True)
 
-        elif record := payload.get("record"):
-            _render_record(record)
+        elif is_record(payload.get("record")):
+            _render_record(payload["record"])
+
+
+#: Fields that only a full record carries. A *reference* (id, title, year) has none of
+#: them, and rendering one as a detail card produces a card of "unknown"s sitting above
+#: the real one -- which is what a `record` key on a reference payload used to do.
+_RECORD_FIELDS: frozenset[str] = frozenset(
+    {
+        "overview",
+        "genres",
+        "director",
+        "top_cast",
+        "release_date",
+        "runtime_minutes",
+        "vote_average",
+        "production_companies",
+    }
+)
+
+
+def is_record(candidate: Any) -> bool:
+    """True when a payload actually holds record data worth drawing a card for.
+
+    A guard rather than a contract: the payload key is the tool's promise, and this is
+    the renderer declining to draw a detail view of something with no details.
+    """
+    return isinstance(candidate, dict) and any(key in candidate for key in _RECORD_FIELDS)
 
 
 def _display_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
