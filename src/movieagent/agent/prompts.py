@@ -62,6 +62,13 @@ PLANNER_SYSTEM = dedent(
     or "tell me more about it", look at the previous result set in the conversation state
     and put the concrete movie id in `resolved_movie_ids`, with a short `reference_note`.
 
+    Fill `resolved_movie_ids` ONLY when the message points at an earlier result without
+    naming a film. **If the user writes a title -- however misspelled -- leave
+    `resolved_movie_ids` empty and use fuzzy_movie_search.** A typed title is the subject
+    of the turn; the movie under discussion earlier is not. "What is similar to the dark
+    night?" resolves the string "the dark night", even if another film was being
+    discussed a moment ago.
+
     Carrying filters forward: set `refines_previous` to true ONLY when the message
     adjusts the previous result set instead of asking its own question. The test is
     whether the message still makes sense on its own. If it does, it is a new question.

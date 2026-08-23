@@ -38,7 +38,7 @@ from langgraph.types import Command, interrupt
 
 from movieagent.agent import prompts
 from movieagent.agent.grounding import check_answer
-from movieagent.agent.plan import Plan
+from movieagent.agent.plan import Plan, ToolName
 from movieagent.agent.state import AgentState, describe_state, resolve_active_query
 from movieagent.agent.tool_bindings import artifact_status, build_tools
 from movieagent.agent.trace import ToolCallRecord, Trace
@@ -284,8 +284,28 @@ class MovieAgent:
             plan.filters,
             refines_previous=plan.refines_previous,
         )
-        if plan.resolved_movie_ids:
+        # A title the user typed beats a movie the system remembers. `fuzzy_movie_search`
+        # exists to establish identity from a typed string, so when the plan calls it the
+        # subject of this turn is whatever it resolves -- not a selection left over from
+        # an earlier turn. Without this guard the planner "resolved" a reference nobody
+        # made: asked about "the dark night" it carried id 120 (The Fellowship of the
+        # Ring, discussed two turns earlier) into `similar_to`, and the agent answered
+        # about the wrong film with full confidence.
+        resolving_a_title = ToolName.FUZZY_MOVIE_SEARCH.value in plan.tool_sequence()
+
+        if plan.resolved_movie_ids and not resolving_a_title:
             update["selected_movie_id"] = plan.resolved_movie_ids[0]
+        elif resolving_a_title:
+            update["selected_movie_id"] = None
+            if plan.resolved_movie_ids:
+                update["plan"] = {**update["plan"], "resolved_movie_ids": []}
+                update["deviations"] = [
+                    "dropped a remembered movie id: this turn names a title to resolve"
+                ]
+        elif not plan.refines_previous:
+            # A question with its own subject starts with no film under discussion; this
+            # turn's own tools re-establish one via `_state_from_tools`.
+            update["selected_movie_id"] = None
         return update
 
     @staticmethod

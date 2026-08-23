@@ -528,3 +528,91 @@ class TestFilterCarryDefaults:
         carried = " ".join(result.trace.carried_forward)
         assert "Science Fiction" in carried
         assert "release_year >= 2010" in carried
+
+
+class TestStaleSelectionGuard:
+    """A typed title beats a remembered movie.
+
+    The live failure: after discussing The Lord of the Rings: The Fellowship of the Ring
+    (id 120), asking "what is similar to the dark night" planned
+    `fuzzy_movie_search` *and* carried `resolved_movie_ids=[120]` from state. The agent
+    called `semantic_search(similar_to=120)` and confidently answered about the wrong
+    film -- while the fuzzy tool sat alongside it having matched The Dark Knight at 97.
+    """
+
+    LOTR = 120
+
+    def _discuss_lotr(self, agent, model, thread) -> None:
+        model.structured_queue = [
+            plan(ToolName.MOVIE_DETAILS, resolved_movie_ids=[self.LOTR])
+        ]
+        model.responses = [
+            tool_call("movie_details", {"movie_id": self.LOTR}),
+            text("The Fellowship of the Ring (2001)."),
+        ]
+        agent.run("tell me about the fellowship of the ring", thread)
+
+    def test_a_named_title_drops_a_remembered_id(self, agent, model, thread) -> None:
+        self._discuss_lotr(agent, model, thread)
+        state = agent.graph.get_state({"configurable": {"thread_id": thread}}).values
+        assert state["selected_movie_id"] == self.LOTR, "precondition: LOTR is selected"
+
+        # The planner wrongly carries the remembered id while also resolving a title.
+        model.structured_queue = [
+            plan(
+                ToolName.FUZZY_MOVIE_SEARCH,
+                ToolName.SEMANTIC_SEARCH,
+                resolved_movie_ids=[self.LOTR],
+                reference_note="carried from earlier turn",
+            )
+        ]
+        model.responses = [
+            tool_call("fuzzy_movie_search", {"title": "the dark night"}),
+            text("Films similar to The Dark Knight."),
+        ]
+        result = agent.run("what is similar to the dark night", thread)
+
+        state = agent.graph.get_state({"configurable": {"thread_id": thread}}).values
+        assert state["selected_movie_id"] != self.LOTR
+        assert result.trace.plan.resolved_movie_ids == []
+        assert any("remembered movie id" in d for d in result.trace.deviations)
+
+        # The turn resolved the title the user actually typed.
+        resolved = result.trace.tool_calls[0].artifact["payload"]["resolved"]
+        assert resolved["title"] == "The Dark Knight"
+
+    def test_a_genuine_reference_still_resolves(self, agent, model, thread) -> None:
+        """The guard must not break "the first one" -- no title is named there."""
+        self._discuss_lotr(agent, model, thread)
+
+        model.structured_queue = [
+            plan(
+                ToolName.MOVIE_DETAILS,
+                resolved_movie_ids=[self.LOTR],
+                reference_note="'that movie' -> The Fellowship of the Ring",
+            )
+        ]
+        model.responses = [
+            tool_call("movie_details", {"movie_id": self.LOTR}),
+            text("Details again."),
+        ]
+        result = agent.run("who directed that movie?", thread)
+
+        state = agent.graph.get_state({"configurable": {"thread_id": thread}}).values
+        assert state["selected_movie_id"] == self.LOTR
+        assert result.trace.plan.resolved_movie_ids == [self.LOTR]
+
+    def test_a_new_question_clears_the_selection(self, agent, model, thread) -> None:
+        self._discuss_lotr(agent, model, thread)
+
+        model.structured_queue = [
+            plan(ToolName.STRUCTURED_SEARCH, filters=SearchQuery(genres=["Comedy"]))
+        ]
+        model.responses = [
+            tool_call("structured_search", {"query": {"genres": ["Comedy"], "limit": 5}}),
+            text("Comedies."),
+        ]
+        agent.run("show me comedies", thread)
+
+        state = agent.graph.get_state({"configurable": {"thread_id": thread}}).values
+        assert state["selected_movie_id"] != self.LOTR

@@ -166,25 +166,32 @@ def main() -> None:
 
     _render_history()
 
-    if st.session_state["awaiting_clarification"]:
-        st.info("Waiting for you to choose which movie you meant.")
-
     typed = st.chat_input("Ask about movies…")
     pending = st.session_state.pop("pending_input", None)
     question = typed or pending
 
-    if not question:
-        return
+    if question:
+        try:
+            _handle(question)
+        except ArtifactError as exc:
+            st.error(str(exc))
+        except ConfigurationError as exc:
+            st.error(str(exc))
+        except Exception as exc:  # noqa: BLE001 - R-105: never show a traceback
+            st.error(
+                f"Something went wrong: {type(exc).__name__}. The details are in the logs."
+            )
+            st.exception(exc) if settings.log_level.upper() == "DEBUG" else None
 
-    try:
-        _handle(question)
-    except ArtifactError as exc:
-        st.error(str(exc))
-    except ConfigurationError as exc:
-        st.error(str(exc))
-    except Exception as exc:  # noqa: BLE001 - R-105: never show a traceback
-        st.error(f"Something went wrong: {type(exc).__name__}. The details are in the logs.")
-        st.exception(exc) if settings.log_level.upper() == "DEBUG" else None
+    # Last, deliberately. Streamlit renders top to bottom and the interrupt that raises
+    # this flag happens inside `_handle`, so writing the notice any earlier shows either
+    # the previous turn's state or places it above the exchange it refers to. Written
+    # here it lands directly beneath the candidate list the agent just printed.
+    if st.session_state["awaiting_clarification"]:
+        st.info(
+            "Waiting for you to choose which movie you meant — reply with a number, "
+            "an ordinal, or the title."
+        )
 
 
 main()
