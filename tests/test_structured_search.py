@@ -234,6 +234,47 @@ class TestFilterMerging:
         # The genre must survive: the user only refined the rating.
         assert merged.genres == ["Science Fiction"]
 
+    def test_year_bounds_replace_across_both_spellings(self) -> None:
+        """A year bound has two spellings; they are one dimension, not two.
+
+        The planner writes "after 2010" as `year_from` on one turn and as a
+        `release_year` condition on another. Treated as unrelated fields they stacked --
+        a live trace showed "release_year > 2010.0; release_year >= 2011" accumulated
+        across two turns, each adding a bound instead of replacing one.
+        """
+        first = SearchQuery(
+            genres=["Science Fiction"],
+            conditions=[condition(NumericField.RELEASE_YEAR, ComparisonOp.GT, 2010)],
+        )
+        second = SearchQuery(year_from=2011)
+        merged = first.merged_with(second)
+
+        assert merged.year_from == 2011
+        assert not [
+            c for c in merged.conditions if c.field_name is NumericField.RELEASE_YEAR
+        ]
+        assert merged.genres == ["Science Fiction"]
+
+    def test_a_year_condition_supersedes_a_carried_range(self) -> None:
+        first = SearchQuery(genres=["Drama"], year_from=2000)
+        second = SearchQuery(
+            conditions=[condition(NumericField.RELEASE_YEAR, ComparisonOp.LT, 1990)]
+        )
+        merged = first.merged_with(second)
+
+        assert merged.year_from is None, "a carried lower bound must not survive"
+        assert merged.conditions[0].value == 1990
+        assert merged.genres == ["Drama"]
+
+    def test_an_unrelated_refinement_leaves_the_year_alone(self) -> None:
+        first = SearchQuery(genres=["Drama"], year_from=2000)
+        second = SearchQuery(
+            conditions=[condition(NumericField.VOTE_AVERAGE, ComparisonOp.GT, 7)]
+        )
+        merged = first.merged_with(second)
+
+        assert merged.year_from == 2000
+
     def test_new_field_is_anded(self) -> None:
         first = SearchQuery(year_from=2011)
         second = SearchQuery(

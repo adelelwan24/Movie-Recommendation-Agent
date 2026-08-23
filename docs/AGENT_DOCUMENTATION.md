@@ -165,7 +165,7 @@ Memory is keyed by a Streamlit-generated thread ID and stored in LangGraph's in-
 - the selected movie ID;
 - the current plan and answer.
 
-Follow-up filters merge with the active query. A `fresh_topic` plan resets old filters. “The first one” is resolved to an ID from stored result references. State survives Streamlit reruns within the process but not a process restart.
+Follow-up filters merge with the active query only when the planner marks the turn `refines_previous`; any other turn starts from its own filters. “The first one” is resolved to an ID from stored result references. State survives Streamlit reruns within the process but not a process restart.
 
 ## 6. User interface and observability
 

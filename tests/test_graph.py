@@ -164,7 +164,7 @@ class TestMultiTurnMemory:
         total1 = turn1.trace.tool_calls[0].artifact["payload"]["total"]
         assert total1 > 25, "turn 1 must be capped so turn 2 can prove it re-queries"
 
-        # --- Turn 2: refine. `fresh_topic=False` means the reducer carries turn 1 forward.
+        # --- Turn 2: refine. `refines_previous=True` is what carries turn 1 forward.
         model.structured_queue = [
             plan(
                 ToolName.STRUCTURED_SEARCH,
@@ -173,7 +173,7 @@ class TestMultiTurnMemory:
                         Condition(field=NumericField.VOTE_AVERAGE, op=ComparisonOp.GT, value=7.5)
                     ]
                 ),
-                fresh_topic=False,
+                refines_previous=True,
             )
         ]
         model.responses = [
@@ -204,7 +204,7 @@ class TestMultiTurnMemory:
                 ToolName.MOVIE_DETAILS,
                 resolved_movie_ids=[first.movie_id],
                 reference_note=f"'the first one' -> {first.title}",
-                fresh_topic=False,
+                refines_previous=True,
             )
         ]
         model.responses = [
@@ -217,7 +217,7 @@ class TestMultiTurnMemory:
         assert record["id"] == first.movie_id
         assert turn3.trace.plan.reference_note
 
-    def test_fresh_topic_resets_carried_filters(self, agent, model, thread) -> None:
+    def test_a_new_topic_resets_carried_filters(self, agent, model, thread) -> None:
         """Without a reset path, filters accumulate forever and turn nine returns nothing."""
         model.structured_queue = [
             plan(ToolName.STRUCTURED_SEARCH, filters=SearchQuery(genres=["Horror"]))
@@ -232,7 +232,6 @@ class TestMultiTurnMemory:
             plan(
                 ToolName.STRUCTURED_SEARCH,
                 filters=SearchQuery(genres=["Comedy"]),
-                fresh_topic=True,
             )
         ]
         model.responses = [
@@ -433,3 +432,99 @@ class TestGraphTopology:
         """ARCHITECTURE.md's diagram is generated from this, so it cannot drift."""
         diagram = agent.mermaid()
         assert "clarify" in diagram and "ground" in diagram
+
+
+class TestFilterCarryDefaults:
+    """A self-contained question must not inherit the previous question's filters.
+
+    The live failure this pins: after "well-rated science fiction", asking "How many
+    movies have Christopher Nolan as director?" carried `genre in ['Science Fiction']`
+    and `vote_count >= 1000` into the count. The answer was confident, plausible and
+    about a question nobody asked -- the worst failure shape this system has.
+
+    The fix inverts the default: filters carry only when the planner marks the turn a
+    refinement. Forgetting context is recoverable and visible; inheriting it is neither.
+    """
+
+    def _establish_filters(self, agent, model, thread) -> None:
+        model.structured_queue = [
+            plan(
+                ToolName.STRUCTURED_SEARCH,
+                filters=SearchQuery(
+                    genres=["Science Fiction"],
+                    conditions=[
+                        Condition(
+                            field=NumericField.VOTE_COUNT, op=ComparisonOp.GTE, value=1000
+                        )
+                    ],
+                ),
+            )
+        ]
+        model.responses = [
+            tool_call(
+                "structured_search",
+                {
+                    "query": {
+                        "genres": ["Science Fiction"],
+                        "conditions": [{"field": "vote_count", "op": "gte", "value": 1000}],
+                    }
+                },
+            ),
+            text("Well-known science fiction."),
+        ]
+        agent.run("Show me well-known science fiction movies", thread)
+
+    def test_a_new_question_does_not_inherit_earlier_filters(
+        self, agent, model, thread
+    ) -> None:
+        self._establish_filters(agent, model, thread)
+
+        # A complete question with its own subject: the planner leaves refines_previous
+        # at its default of False.
+        model.structured_queue = [
+            plan(ToolName.STRUCTURED_SEARCH, filters=SearchQuery(directors=["Christopher Nolan"]))
+        ]
+        model.responses = [
+            tool_call("structured_search", {"query": {"directors": ["Christopher Nolan"]}}),
+            text("Christopher Nolan directed 8 films in this dataset."),
+        ]
+        result = agent.run("How many movies have Christopher Nolan as director?", thread)
+
+        carried = " ".join(result.trace.carried_forward)
+        assert "Science Fiction" not in carried
+        assert "vote_count" not in carried
+
+        applied = result.trace.tool_calls[0].artifact["arguments"]["query"]
+        assert applied.get("genres", []) == []
+        assert applied.get("conditions", []) == []
+        assert result.trace.tool_calls[0].artifact["payload"]["total"] == 8
+
+    def test_a_refinement_still_carries(self, agent, model, thread) -> None:
+        """The inverted default must not break R-148 -- refinements still layer."""
+        self._establish_filters(agent, model, thread)
+
+        model.structured_queue = [
+            plan(
+                ToolName.STRUCTURED_SEARCH,
+                filters=SearchQuery(year_from=2010),
+                refines_previous=True,
+            )
+        ]
+        model.responses = [
+            tool_call(
+                "structured_search",
+                {
+                    "query": {
+                        "genres": ["Science Fiction"],
+                        "year_from": 2010,
+                        "conditions": [{"field": "vote_count", "op": "gte", "value": 1000}],
+                    }
+                },
+            ),
+            text("Narrowed to 2010 and later."),
+        ]
+        result = agent.run("only the ones from 2010 onwards", thread)
+
+        carried = " ".join(result.trace.carried_forward)
+        assert "Science Fiction" in carried
+        assert "release_year >= 2010" in carried

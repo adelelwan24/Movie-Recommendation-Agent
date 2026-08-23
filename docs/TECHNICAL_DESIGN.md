@@ -177,7 +177,7 @@ This is deliberate asymmetry: the embedding decides *which* films are relevant; 
 Routing is a two-stage decision, and neither stage is left to the model's discretion alone.
 
 **Stage 1 — the plan.** One structured LLM call before any tool runs, returning a typed `Plan`
-(intent, steps, rationale, extracted filters, resolved movie ids, `fresh_topic`, `needs_tools`).
+(intent, steps, rationale, extracted filters, resolved movie ids, `refines_previous`, `needs_tools`).
 Because it is a schema and not free text, the tool choice is inspectable, the rationale is capped
 at 240 characters, and conversational references are resolved to concrete ids *before* execution —
 so tools never receive "the first one" and stay independently testable.
@@ -541,7 +541,7 @@ Storing them as typed channels makes *"tell me about the first one"* an array in
 
 | Channel | Type | Purpose | Update rule |
 |---|---|---|---|
-| `active_query` | `SearchQuery \| None` | Filters carried across turns | Merge, or drop on `fresh_topic` |
+| `active_query` | `SearchQuery \| None` | Filters carried across turns | Merged only when the turn refines the previous one; otherwise replaced |
 | `last_results` | `list[MovieRef]` | The previous result set — the referent for ordinals | Overwritten each turn that returns refs |
 | `last_result_total` | `int \| None` | True match count, which may exceed the shown rows | Overwritten with the set |
 | `selected_movie_id` | `int \| None` | The film under discussion | Set by the planner, a clarification, or a single-result turn |
@@ -562,8 +562,9 @@ list, so a 25-row display cap can never silently truncate a follow-up.
 
 Implemented once in `resolve_active_query`:
 
-- `fresh_topic` → drop what was carried. Without a reset path, filters accumulate forever and turn
-  nine returns nothing.
+- **`refines_previous` false (the default) → drop what was carried.** Only a message that adjusts the
+  previous result set ("only the ones above 7.5") inherits its filters; a question with its own
+  subject starts clean.
 - New condition on an already-constrained field → **replaces** it ("above 7.5" then "above 8" gives
   `> 8`, not both).
 - New non-empty list filter → **replaces** its counterpart rather than unioning. "Actually,

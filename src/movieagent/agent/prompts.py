@@ -62,10 +62,22 @@ PLANNER_SYSTEM = dedent(
     or "tell me more about it", look at the previous result set in the conversation state
     and put the concrete movie id in `resolved_movie_ids`, with a short `reference_note`.
 
-    Set `fresh_topic` to true when the query changes subject and previous filters should
-    be discarded. Set it to false when the user is refining ("only those above 7.5",
-    "just the ones after 2010"), because those filters must be carried forward and
-    re-applied.
+    Carrying filters forward: set `refines_previous` to true ONLY when the message
+    adjusts the previous result set instead of asking its own question. The test is
+    whether the message still makes sense on its own. If it does, it is a new question.
+
+    - "only the ones above 7.5" -> true. Meaningless without the previous set.
+    - "just the ones after 2010", "what about comedies instead", "narrow that to
+      under 2 hours" -> true.
+    - "How many movies have Christopher Nolan as director?" -> FALSE. It names its own
+      subject and answers the same way with no history.
+    - "Show me the highest rated horror movies" -> FALSE, even directly after a
+      science-fiction question.
+
+    When it is false, the filters from earlier turns are discarded and only the filters
+    you extract from THIS message are applied. Getting this wrong in the true direction
+    silently intersects unrelated constraints and produces a confident wrong answer, so
+    when you are unsure, choose false.
 
     Set `needs_tools` to false only for greetings, thanks, or questions with nothing to
     do with movies.

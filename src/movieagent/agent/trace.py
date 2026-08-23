@@ -51,6 +51,10 @@ class Trace:
     question: str = ""
     plan: Plan | None = None
     tool_calls: list[ToolCallRecord] = field(default_factory=list)
+    #: Filters inherited from *earlier* turns. Populated only when the planner read this
+    #: message as a refinement -- on any other turn the active query is simply this
+    #: turn's own filters, and labelling those "carried forward" made a working reset
+    #: look like the accumulation bug it had just fixed.
     carried_forward: list[str] = field(default_factory=list)
     grounding_warnings: list[str] = field(default_factory=list)
     deviations: list[str] = field(default_factory=list)

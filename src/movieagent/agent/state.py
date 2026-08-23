@@ -86,14 +86,28 @@ def resolve_active_query(
     current: SearchQuery | None,
     new_filters: SearchQuery | None,
     *,
-    fresh_topic: bool,
+    refines_previous: bool,
 ) -> SearchQuery | None:
     """Decide the turn's carried filter set (R-148, the requester's OQ-006 decision).
 
-    * ``fresh_topic`` -- the query changed subject; drop what was carried. Without a
-      reset path filters accumulate forever and turn nine returns nothing.
-    * new filters on an existing set -- layered per :meth:`SearchQuery.merged_with`.
-    * nothing new -- carry the existing set unchanged.
+    **Filters carry forward only when the planner marks the turn as a refinement.**
+    Anything else starts from this turn's own filters:
+
+    * ``refines_previous`` false -- use only what this turn extracted. A question that
+      names its own subject ("how many films did Nolan direct?") must not inherit the
+      genre and rating constraints of the question before it.
+    * ``refines_previous`` true, with new filters -- layered per
+      :meth:`SearchQuery.merged_with`.
+    * ``refines_previous`` true, nothing new -- carry the existing set unchanged.
+
+    The default direction was inverted after a live failure. It used to carry unless the
+    planner set ``fresh_topic``, and the planner under-set it: "How many movies have
+    Christopher Nolan as director?" inherited ``genre in ['Science Fiction']`` and
+    ``vote_count >= 1000`` from two turns earlier and answered a question nobody asked.
+    Both directions are wrong sometimes, but they fail differently -- forgetting context
+    produces a visibly broader answer the user can correct, while inheriting it produces
+    a confident, plausible, wrong number. Given the choice, this system fails the way you
+    can see (ADR-0003's principle applied to memory).
 
     The requester chose *carry filters forward and re-query* over *filter the rows you
     displayed*, so what travels is the filter object rather than the rendered table --
@@ -108,7 +122,7 @@ def resolve_active_query(
     Computing the value in the node removes the hazard: what is written is already
     correct, so no reducer has to run for state to be valid.
     """
-    if fresh_topic:
+    if not refines_previous:
         return new_filters if (new_filters and not new_filters.is_empty()) else None
     if new_filters is None or new_filters.is_empty():
         return current

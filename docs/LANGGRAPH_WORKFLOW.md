@@ -192,8 +192,8 @@ did nothing.
 
 The merge rules live in `resolve_active_query` ([state.py:85](../src/movieagent/agent/state.py#L85)):
 
-* `fresh_topic` → drop what was carried (without a reset path, filters accumulate forever and turn
-  nine returns nothing);
+* `refines_previous` false (the default) → use only this turn's own filters. A question that names
+  its own subject must not inherit the constraints of the question before it;
 * new filters on an existing set → layered per `SearchQuery.merged_with` (a new condition on an
   already-constrained field *replaces* it; a non-empty list filter *replaces* rather than unions —
   "actually, comedies" means comedies, not sci-fi *and* comedies);
@@ -259,7 +259,7 @@ tools never receive "the first one" and stay independently testable.
 |---|---|
 | `question` | the raw text |
 | `plan` | `plan.model_dump(mode="json")`, or `None` on failure |
-| `active_query` | `resolve_active_query(current, plan.filters, fresh_topic=plan.fresh_topic)` |
+| `active_query` | `resolve_active_query(current, plan.filters, refines_previous=plan.refines_previous)` |
 | `selected_movie_id` | `plan.resolved_movie_ids[0]` if any |
 | `tool_iterations` | `0` |
 | `answer` | `""` — **cleared deliberately** |

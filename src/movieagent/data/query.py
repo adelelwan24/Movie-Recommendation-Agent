@@ -211,11 +211,32 @@ class SearchQuery(BaseModel):
         turn nine returns nothing.
         """
         replaced = {c.field_name for c in other.conditions}
-        conditions = [c for c in self.conditions if c.field_name not in replaced]
+
+        # A release-year bound has two spellings -- `year_from`/`year_to` and a
+        # `Condition` on `release_year` -- and the planner uses both. Treating them as
+        # unrelated fields let them stack: a live trace accumulated
+        # "release_year > 2010.0; release_year >= 2011" across two turns, each turn
+        # adding a bound rather than replacing one. They are one dimension here.
+        other_sets_year_range = other.year_from is not None or other.year_to is not None
+        other_sets_year_condition = any(
+            c.field_name is NumericField.RELEASE_YEAR for c in other.conditions
+        )
+
+        conditions = [
+            c
+            for c in self.conditions
+            if c.field_name not in replaced
+            and not (other_sets_year_range and c.field_name is NumericField.RELEASE_YEAR)
+        ]
         conditions.extend(other.conditions)
 
         def pick(new: list[str], old: list[str]) -> list[str]:
             return list(new) if new else list(old)
+
+        def year(new: int | None, old: int | None) -> int | None:
+            if new is not None:
+                return new
+            return None if other_sets_year_condition else old
 
         return SearchQuery(
             conditions=conditions,
@@ -226,8 +247,8 @@ class SearchQuery(BaseModel):
             languages=pick(other.languages, self.languages),
             people=pick(other.people, self.people),
             directors=pick(other.directors, self.directors),
-            year_from=other.year_from if other.year_from is not None else self.year_from,
-            year_to=other.year_to if other.year_to is not None else self.year_to,
+            year_from=year(other.year_from, self.year_from),
+            year_to=year(other.year_to, self.year_to),
             sort_by=other.sort_by if other.sort_by is not None else self.sort_by,
             sort_desc=other.sort_desc,
             limit=other.limit,

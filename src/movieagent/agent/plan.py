@@ -70,11 +70,14 @@ class Plan(BaseModel):
         default=None,
         description="What a conversational reference was resolved to, for the trace.",
     )
-    fresh_topic: bool = Field(
+    refines_previous: bool = Field(
         default=False,
         description=(
-            "True when this query starts a new subject and previous filters should be "
-            "discarded rather than carried forward."
+            "True ONLY when this message narrows or adjusts the previous result set "
+            "instead of asking its own question -- 'only the ones above 7.5', 'just the "
+            "ones after 2010', 'what about comedies'. Filters from earlier turns are "
+            "carried forward and re-applied only when this is true. A question that "
+            "names its own subject is not a refinement."
         ),
     )
     needs_tools: bool = Field(
@@ -101,5 +104,5 @@ class Plan(BaseModel):
             "filters": self.filters.to_display() if self.filters else {},
             "resolved_movie_ids": self.resolved_movie_ids,
             "reference_note": self.reference_note,
-            "fresh_topic": self.fresh_topic,
+            "refines_previous": self.refines_previous,
         }

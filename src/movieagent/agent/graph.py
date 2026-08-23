@@ -282,7 +282,7 @@ class MovieAgent:
         update["active_query"] = resolve_active_query(
             state.get("active_query"),
             plan.filters,
-            fresh_topic=plan.fresh_topic,
+            refines_previous=plan.refines_previous,
         )
         if plan.resolved_movie_ids:
             update["selected_movie_id"] = plan.resolved_movie_ids[0]
@@ -631,8 +631,16 @@ class MovieAgent:
                 )
             )
 
+        # Only a refinement inherits anything. On any other turn `active_query` holds
+        # exactly the filters this message produced, which the panel already shows as
+        # "filters extracted from this message".
         active = state.get("active_query")
-        if active is not None and not active.is_empty():
+        if (
+            active is not None
+            and not active.is_empty()
+            and trace.plan is not None
+            and trace.plan.refines_previous
+        ):
             trace.carried_forward = active.describe()
 
         trace.result_refs = [MovieRef.from_dict(r) for r in (state.get("last_results") or [])]
